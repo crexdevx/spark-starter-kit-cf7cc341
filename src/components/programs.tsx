@@ -155,7 +155,7 @@ export function Programs() {
       state.pos += dx;
       state.velocity = state.velocity * 0.6 + (dx / dt) * 0.4;
       wrap();
-跟我们    };
+    };
 
     const endDrag = () => {
       if (!state.dragging) return;
@@ -236,7 +236,7 @@ export function Programs() {
 
         <div
           ref={trackRef}
-          className="flex w-max cursor-grab touch-pan-y select-none gap-6 pl-6 group-focus-within:pause-none motion-reduce:justify-center motion-reduce:pr-6"
+          className="flex w-max cursor-grab touch-pan-y select-none gap-6 pl-6 motion-reduce:justify-center motion-reduce:pr-6"
         >
           {items.map((program, index) => (
             <article
