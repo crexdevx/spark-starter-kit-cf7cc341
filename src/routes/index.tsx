@@ -3,6 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { About } from "../components/about";
 import { Hero } from "../components/hero";
 import { Membership } from "../components/membership";
+import { Programs } from "../components/programs";
 
 import { siteConfig } from "../config/site";
 
