@@ -35,6 +35,7 @@ function Index() {
     <main>
       <Hero />
       <About />
+      <Programs />
       <Membership />
     </main>
   );
