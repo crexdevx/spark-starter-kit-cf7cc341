@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import cardioImg from "../assets/program-cardio.webp.asset.json";
 import fatlossImg from "../assets/program-fatloss.webp.asset.json";
 import muscleImg from "../assets/program-muscle.webp.asset.json";
@@ -50,16 +51,152 @@ const PROGRAMS: Program[] = [
   },
 ];
 
+/** Auto-scroll speed in px/second (auto-glide when not being dragged). */
+const AUTO_SPEED = 80;
+
 /**
  * "Our Programs" section.
  *
- * Black background with gold accents. Program cards glide horizontally in a
- * slow infinite loop (marquee); the animation pauses on hover/focus and is
- * disabled for users who prefer reduced motion.
+ * Black background with gold accents. Program cards glide horizontally in an
+ * infinite loop; the track can also be dragged with a finger (touch) or the
+ * mouse, with a little momentum after release. Pauses on hover/focus and the
+ * auto-glide is disabled for users who prefer reduced motion.
  */
 export function Programs() {
-  // Duplicate the list so the marquee can loop seamlessly.
+  // Duplicate the list so the loop can wrap seamlessly.
   const items = [...PROGRAMS, ...PROGRAMS];
+
+  const trackRef = useRef<HTMLDivElement>(null);
+  const stateRef = useRef({
+    pos: 0,
+    halfWidth: 0,
+    autoPlay: true,
+    hovered: false,
+    dragging: false,
+    lastPointerX: 0,
+    lastMoveTime: 0,
+    velocity: 0, // px/s, from the most recent drag movement
+    momentum: 0, // px/s, decays after release
+  });
+
+  useEffect(() => {
+    const track = trackRef.current;
+    if (!track) return;
+    const state = stateRef.current;
+
+    const reduceMotion = window.matchMedia(
+      "(prefers-reduced-motion: reduce)"
+    ).matches;
+    if (reduceMotion) {
+      state.autoPlay = false;
+    }
+
+    const measure = () => {
+      state.halfWidth = track.scrollWidth / 2;
+    };
+    measure();
+    const resizeObserver = new ResizeObserver(measure);
+    resizeObserver.observe(track);
+
+    // Keep position within (-halfWidth, 0] so the loop is seamless in both directions.
+    const wrap = () => {
+      if (state.halfWidth <= 0) return;
+      while (state.pos <= -state.halfWidth) state.pos += state.halfWidth;
+      while (state.pos > 0) state.pos -= state.halfWidth;
+    };
+
+    let raf = 0;
+    let lastTime = performance.now();
+
+    const tick = (now: number) => {
+      const dt = Math.min((now - lastTime) / 1000, 0.1);
+      lastTime = now;
+
+      const autoAllowed =
+        state.autoPlay && !state.dragging && !state.hovered && !reduceMotion;
+
+      if (state.dragging) {
+        // Position is updated directly in pointermove; decay stale velocity.
+        state.velocity *= 0.8;
+      } else if (Math.abs(state.momentum) > 4) {
+        // Momentum glide after a flick, decaying back into the auto speed.
+        state.pos += state.momentum * dt;
+        state.momentum *= Math.pow(0.06, dt);
+        if (autoAllowed) state.pos -= AUTO_SPEED * dt;
+      } else {
+        state.momentum = 0;
+        if (autoAllowed) state.pos -= AUTO_SPEED * dt;
+      }
+
+      wrap();
+      track.style.transform = `translate3d(${state.pos}px, 0, 0)`;
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+
+    const onPointerDown = (e: PointerEvent) => {
+      if (e.pointerType === "mouse" && e.button !== 0) return;
+      state.dragging = true;
+      state.momentum = 0;
+      state.lastPointerX = e.clientX;
+      state.lastMoveTime = performance.now();
+      state.velocity = 0;
+      track.setPointerCapture(e.pointerId);
+      track.classList.add("cursor-grabbing");
+    };
+
+    const onPointerMove = (e: PointerEvent) => {
+      if (!state.dragging) return;
+      const dx = e.clientX - state.lastPointerX;
+      state.lastPointerX = e.clientX;
+      const now = performance.now();
+      const dt = Math.max((now - state.lastMoveTime) / 1000, 0.001);
+      state.lastMoveTime = now;
+      state.pos += dx;
+      state.velocity = state.velocity * 0.6 + (dx / dt) * 0.4;
+      wrap();
+    };
+
+    const endDrag = () => {
+      if (!state.dragging) return;
+      state.dragging = false;
+      track.classList.remove("cursor-grabbing");
+      // Carry the flick forward as momentum (velocity sampled from the drag).
+      if (performance.now() - state.lastMoveTime < 120) {
+        state.momentum = Math.max(
+          -2400,
+          Math.min(2400, state.velocity * 0.9)
+        );
+      }
+    };
+
+    const onPointerEnter = (e: PointerEvent) => {
+      if (e.pointerType === "mouse") state.hovered = true;
+    };
+    const onPointerLeave = (e: PointerEvent) => {
+      if (e.pointerType === "mouse") state.hovered = false;
+    };
+
+    track.addEventListener("pointerdown", onPointerDown);
+    track.addEventListener("pointermove", onPointerMove);
+    track.addEventListener("pointerup", endDrag);
+    track.addEventListener("pointercancel", endDrag);
+    track.addEventListener("lostpointercapture", endDrag);
+    track.addEventListener("pointerenter", onPointerEnter);
+    track.addEventListener("pointerleave", onPointerLeave);
+
+    return () => {
+      cancelAnimationFrame(raf);
+      resizeObserver.disconnect();
+      track.removeEventListener("pointerdown", onPointerDown);
+      track.removeEventListener("pointermove", onPointerMove);
+      track.removeEventListener("pointerup", endDrag);
+      track.removeEventListener("pointercancel", endDrag);
+      track.removeEventListener("lostpointercapture", endDrag);
+      track.removeEventListener("pointerenter", onPointerEnter);
+      track.removeEventListener("pointerleave", onPointerLeave);
+    };
+  }, []);
 
   return (
     <section
@@ -85,7 +222,7 @@ export function Programs() {
         </header>
       </div>
 
-      {/* Infinite horizontal loop */}
+      {/* Infinite horizontal loop — auto-glides and can be swiped with a finger */}
       <div className="group relative mt-12 overflow-hidden pb-16 lg:pb-24">
         {/* Edge fades */}
         <div
@@ -97,7 +234,10 @@ export function Programs() {
           className="pointer-events-none absolute inset-y-0 right-0 z-10 w-16 bg-gradient-to-l from-surface-pure to-transparent sm:w-28"
         />
 
-        <div className="flex w-max animate-programs-marquee gap-6 pl-6 group-hover:[animation-play-state:paused] group-focus-within:[animation-play-state:paused] motion-reduce:animate-none motion-reduce:flex-wrap motion-reduce:justify-center motion-reduce:pr-6">
+        <div
+          ref={trackRef}
+          className="flex w-max cursor-grab touch-pan-y select-none gap-6 pl-6 motion-reduce:justify-center motion-reduce:pr-6"
+        >
           {items.map((program, index) => (
             <article
               key={`${program.title}-${index}`}
@@ -109,9 +249,10 @@ export function Programs() {
                   src={program.image}
                   alt={program.title}
                   loading="lazy"
+                  draggable={false}
                   width={768}
                   height={512}
-                  className="h-full w-full object-cover transition-transform duration-500 hover:scale-105"
+                  className="pointer-events-none h-full w-full object-cover transition-transform duration-500"
                 />
                 <div
                   aria-hidden="true"

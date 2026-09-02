@@ -171,22 +171,3 @@
   }
 }
 
-/* Slow infinite horizontal marquee for the Programs section */
-@keyframes programs-marquee {
-  from {
-    transform: translateX(0);
-  }
-  to {
-    transform: translateX(-50%);
-  }
-}
-
-@utility animate-programs-marquee {
-  animation: programs-marquee 60s linear infinite;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .animate-programs-marquee {
-    animation: none;
-  }
-}
